@@ -1,0 +1,22 @@
+#!/usr/bin/perl -w
+
+use strict;
+
+use File::Copy;
+use File::Basename;
+
+for my $f (@ARGV) {
+   my $bn=basename $f;
+   my $dn=dirname $f;
+   my $good=$bn;
+   $good =~ s/&/and/g;
+   $good =~ s/[^-\d\w,\.+=#:]/_/g;
+   $good =~ s/__+/_/g;
+   if ($f ne $good) {
+      move($f,"$dn/$good");
+      print "Repaired $f\n";
+   } else {
+      print "Skipped $f\n"; 
+   }
+}
+

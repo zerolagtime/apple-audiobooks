@@ -1,0 +1,25 @@
+#!/bin/sh
+# Looking for input of the form
+# TITLE "Chapter title"
+# INDEX 0 34 MM:SS:MS
+# but any fields before, after, or inbetween are ignored
+# dumps out
+# hh:mm:ss.ms Chapter title
+#if [ $# -gt 0 ]; then
+   cue=$(cat "$@")
+#else
+#   cue=$(cat)
+#fi
+echo "$cue" | awk '
+/TITLE/ {
+   sub(/.*TITLE ./,""); 
+   sub(/.$/,""); 
+   title=$0
+} 
+/INDEX/ {
+   split($3,ts,":"); 
+   h=ts[1]/60; 
+   m=ts[1] % 60; 
+   printf "%02d:%02d:%02d.%03d %s\n", h,m,ts[2],ts[3],title
+}
+'
