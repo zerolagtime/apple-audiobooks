@@ -146,7 +146,7 @@ fi
 
 getAmazonLink() {
    base_url="https://www.amazon.com/s?k="
-   params=$(echo "$@" | sed -e 's/ /_/g; s/[-+,\.={}\(\)\&\/\\]*//g;s/_/+/g')
+   params=$(echo "$@" | sed -e 's/ /_/g; s/[-+\.={}\(\)\&\/\\]*//g;s/[_,]/+/g; s/++/+/g')
    url="$base_url$params"
    #echo "Retrieving URL: $base_url$params"
    #wget -O - --quiet "$base_url$params"
@@ -172,9 +172,15 @@ if [ $hits -eq 0 ]; then
    echo "about the audiobook.  Please type some words that will be used to"
    echo "search Google."
    read -p "Keywords: " guess
-   filtered_guess=$(echo "$guess"| sed -e 's/^/%22/; s/ /%22 %22/g; s/$/%22/')
-   getGoogleBooksJSON $filtered_guess > $googleJSONFile
-   hits=$(grep '"id":' $googleJSONFile | wc -l)
+   if [ -n "$guess" ]; then
+      filtered_guess=$(echo "$guess"| sed -e 's/^/%22/; s/ /%22 %22/g; s/$/%22/')
+      getGoogleBooksJSON $filtered_guess > $googleJSONFile
+      hits=$(grep '"id":' $googleJSONFile | wc -l)
+   else
+      echo "Skipping Google lookup."
+      touch $googleJSONFile
+      hits=0
+   fi
 fi
 vol_num=0
 declare -a volumes
