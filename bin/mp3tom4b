@@ -15,6 +15,8 @@ GENRE=Audiobook
 bitrate=112
 join=1
 VERBOSE=0
+# use the ffmpeg progress bar if available
+FFMPEG="$(echo $(command -v ffpb) || $(command -v ffmpeg))"
 usage="Usage: $0 [-v] [-t \"title\"] [-a \"artist\"] [-y year]
      [-l \"album\"] [-b ##] [-c=\"comment\"] [-o file] [-p picture]
 Where -t is for the Title  (TITLE=...)
@@ -101,6 +103,14 @@ if [ -f info.txt ]; then
    #   fi
    #fi
    DESCRIPTION=$(sed -e 's/$/\r/g' description.txt)
+   if [ -f description.short.txt ]; then
+      SHORT_DESC=$(sed -e 's/$/\r/g' description.short.txt)
+   else
+      SHORT_DESC=$(sed -e 's/$/\r/g' description.txt | cut -c1-255)
+      if [ "$SHORT_DESC" != "$DESCRIPTION" ]; then
+          echo "WARNING: Cutting the description to 255 chars" 1>&2
+      fi
+   fi
    if [ -n "$BITRATE" ]; then bitrate=$BITRATE; fi
    if [ -n "$OUT" ]; then outfile=$OUT; fi
 fi
@@ -760,11 +770,11 @@ lameOrStatic() {
     cat $tempFileList
     echo "Concatenating MP3 files into one - no reencoding"
     /bin/rm -f $tempMp3
-    ffmpeg -v warning -hide_banner -f concat -safe 0 -i $tempFileList -codec copy $tempMp3 || exit 1
+    $FFMPEG -v warning -hide_banner -f concat -safe 0 -i $tempFileList -codec copy $tempMp3 || exit 1
     sec=$(mp3info -p "%S" "$tempMp3")
     frames=$(mp3info -p "%u" "$tempMp3")
     echo "Converting one MP3 file to M4A - total of $sec seconds, $frames frames"
-    ffmpeg -v panic -hide_banner -i $tempMp3 -f wav - | \
+    $FFMPEG -v panic -hide_banner -i $tempMp3 -f wav - | \
     faac -o "$outfile" --ignorelength -v1 \
        --title "$TITLE" \
        --artist "$ARTIST" \
@@ -785,12 +795,14 @@ lameOrStatic() {
     rm $tempMp3 $tempFileList
     echo "Adding the description"
     mp4tags -longdesc "$DESCRIPTION" "$outfile"
+    echo "Forcing a genre and description with AtomicParsely"
+    AtomicParsley "$outfile" --genre "Audiobook" --longdesc "$DESCRIPTION" --description "$DESCRIPTION" 
 if [ -n "$chapterfile" -a -f "$chapterfile" ]; then
 	echo "Applying $(wc -l < $chapterfile) chapters to $outfile"
    echo "...first with MP4bOX"
 	MP4Box -chap $chapterfile $outfile
-   echo "...then with mp4chaps"
-	mp4chaps -c -Q $outfile
+   #echo "...then with mp4chaps"
+	#mp4chaps -c -Q $outfile
    echo "Add 5 minute chapters with: mp4chaps -e 600 -Q $outfile"
 else
    echo "Adding chapter markers every 5 minutes"

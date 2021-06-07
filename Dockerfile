@@ -1,6 +1,22 @@
+
+FROM ubuntu:21.04 AS build
+# tzdata will prompt for a timezone if one is not set.  Set one as recommended at
+#   https://dev.to/setevoy/docker-configure-tzdata-and-timezone-during-build-20bk
+ENV TZ=America/New_York
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
+    apt-get update && \
+    apt-get -y install git cmake make build-essential && \
+    mkdir /src && chown 1000 /src
+USER 1000
+RUN git clone https://github.com/wez/atomicparsley.git /src/ap  
+WORKDIR /src/ap
+RUN git checkout --detach 20210124.204813.840499f 
+RUN cmake . && \
+    cmake --build . --config Release 
+
 # syntax=docker/dockerfile:1.0
 FROM ubuntu:18.04
-
+COPY --from=build /src/ap/AtomicParsley /usr/bin/AtomicParsley
 RUN useradd -m -d /home/abook abook
 
 RUN apt-get update && \
@@ -23,7 +39,9 @@ RUN apt-get update && \
         python-pymad \
         perl-modules \
         python-pymad \
-        grep 
+        grep \
+        python3 \
+        python3-pip
 
 ENV BINDIR=/opt/audiobook_tools
 ENV EXTRAS=/opt/extra_tools
@@ -34,6 +52,7 @@ RUN wget -O /tmp/ffmpeg.tar.xz --quiet \
     install ffmpeg ffprobe $EXTRAS && \
     rm /tmp/ffmpeg.tar.xz
 
+RUN command -v pip && pip install --user ffpb
 # binaries go into a place that permissions are locked down in
 COPY bin $BINDIR
 RUN ln -s $(command -v mp4chaps) $BINDIR/mp4chaps

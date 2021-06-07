@@ -54,6 +54,7 @@ multipartEncode ()
     offset=75;
     numPerPart=$(echo "(($numMp3 * 100 /$PARTS) + $offset)/100 " | bc -q);
     partList=$(c=1; while [ $c -le $PARTS ]; do echo $c; c=$[ $c + 1 ]; done );
+    set -x
     for PART in $partList;
     do
         export PART;
@@ -66,15 +67,18 @@ multipartEncode ()
         fi
         cd part$PART;
         echo "Computing chapter marks";
+        read -p "Press Enter to prep audiobook: " answer
         echo | prepaudiobook 2> /dev/null > /dev/null;
         cat chapters.txt
         cp ../*.jpg ../description.txt .;
         echo "Calculating the info.txt file";
         cat ../info.txt | envsubst > info.txt;
         echo "Scheduling the encoding";
+        read -p "Press Enter to encode: " answer
         ( encode;
         bash -c "mv *.mp3 *.m4b .." ) & echo "Done with part $PART" );
     done;
+    set +x
     return 0
 }
 alias mp3tom4b="docker run -it --rm --tmpfs=/tmp -v '$PWD:/home/abook' audiobook_tools:develop mp3tom4b"
