@@ -146,7 +146,7 @@ fi
 
 getAmazonLink() {
    base_url="https://www.amazon.com/s?k="
-   params=$(echo "$@" | sed -e 's/ /_/g; s/[-+\.={}\(\)\&\/\\]*//g;s/[_,]/+/g; s/++/+/g')
+   params=$(echo "$@" | sed -e 's/ /_/g; s/\//+/g; s/[-+\.={}\(\)\&\/\\]*//g;s/[_,]/+/g; s/++/+/g')
    url="$base_url$params"
    #echo "Retrieving URL: $base_url$params"
    #wget -O - --quiet "$base_url$params"
@@ -154,7 +154,7 @@ getAmazonLink() {
 }
 getGoogleBooksJSON() {
    base_url="https://www.googleapis.com/books/v1/volumes?maxResults=10&q="
-   params=$(echo "$@" | sed -e 's/ /_/g; s/[-+,\.={}\(\)\&\/\\]*//g;s/_/+/g')
+   params=$(echo "$@" | sed -e 's/ /_/g; s/\//+/g; s/[-+,\.={}\(\)\&\/\\]*//g;s/_/+/g')
    url="$base_url$params"
    #echo "Retrieving URL: $base_url$params"
    wget -O - --quiet "$base_url$params"

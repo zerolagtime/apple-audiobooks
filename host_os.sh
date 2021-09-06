@@ -21,7 +21,7 @@ encode ()
     waitQuiet >> encode.log;
     echo "Encoding beginning for $(basename "$(pwd)")";
 
-    (docker run --rm --tmpfs=/tmp -v "$PWD:/home/abook" audiobook_tools:develop mp3tom4b 2>&1 ) 2>&1 >> encode.log
+    (docker run --rm --tmpfs=/tmp -v "$PWD:/home/abook" --user $UID audiobook_tools:develop mp3tom4b 2>&1 ) 2>&1 >> encode.log
 }
 
 multipartEncode () 
@@ -77,5 +77,6 @@ multipartEncode ()
     done;
     return 0
 }
-alias mp3tom4b="docker run -it --rm --tmpfs=/tmp -v '$PWD:/home/abook' audiobook_tools:develop mp3tom4b"
-alias prepaudiobook='docker run -it --rm --tmpfs=/tmp -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
+alias mp3tom4b="docker run -it --rm --tmpfs=/tmp --user $UID -v '$PWD:/home/abook' audiobook_tools:develop mp3tom4b"
+alias prepaudiobook='docker run -it --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
+alias mp4chaps='docker run -it --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop mp4chaps'

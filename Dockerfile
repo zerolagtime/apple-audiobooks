@@ -16,11 +16,13 @@ RUN cmake . && \
 
 # syntax=docker/dockerfile:1.0
 FROM ubuntu:18.04
-COPY --from=build /src/ap/AtomicParsley /usr/bin/AtomicParsley
+#COPY --from=build /src/ap/AtomicParsley /usr/bin/AtomicParsley
 RUN useradd -m -d /home/abook abook
 
+        # gpac \
 RUN apt-get update && \
     apt-get install -y \
+        atomicparsley \
         apt-utils \
         xz-utils \
         unzip \
@@ -30,7 +32,6 @@ RUN apt-get update && \
         id3v2 \
         mp3info \
         vorbis-tools \
-        gpac \
         mp4v2-utils \
         lame \
         mp4v2-utils \
@@ -42,7 +43,10 @@ RUN apt-get update && \
         grep \
         python3 \
         python3-pip
-
+# see https://gpac.wp.imt.fr/downloads/ for GPAC updates
+# note that this is very sloppy and pulls in over 170 packages so that
+# we can get one tool
+RUN wget "http://download.tsi.telecom-paristech.fr/gpac/release/1.0.1/gpac_1.0.1-rev0-gd8538e8a-master_amd64.deb" && apt install -y ./gpac_1.0.1-rev0-gd8538e8a-master_amd64.deb && rm gpac_1.0.1-rev0-gd8538e8a-master_amd64.deb
 ENV BINDIR=/opt/audiobook_tools
 ENV EXTRAS=/opt/extra_tools
 RUN mkdir -p $EXTRAS
@@ -52,12 +56,12 @@ RUN wget -O /tmp/ffmpeg.tar.xz --quiet \
     install ffmpeg ffprobe $EXTRAS && \
     rm /tmp/ffmpeg.tar.xz
 
-RUN command -v pip && pip install --user ffpb
+RUN command -v pip3 && pip3 install --user ffpb
 # binaries go into a place that permissions are locked down in
-COPY bin $BINDIR
-RUN ln -s $(command -v mp4chaps) $BINDIR/mp4chaps
 COPY odc /opt/overdrive_chapters
 COPY extras/ $EXTRAS
+COPY bin $BINDIR
+RUN ln -s $(command -v mp4chaps) $BINDIR/mp4chaps
 USER abook
 ENV PATH=${PATH}:${BINDIR}:${EXTRAS}
 WORKDIR /home/abook
