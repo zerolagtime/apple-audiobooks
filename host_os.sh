@@ -66,7 +66,7 @@ multipartEncode ()
         fi
         cd part$PART;
         echo "Computing chapter marks";
-        echo | prepaudiobook 2> /dev/null > /dev/null;
+        prepaudiobook_notty </dev/null >/dev/null
         cat chapters.txt
         cp ../*.jpg ../description.txt .;
         echo "Calculating the info.txt file";
@@ -79,4 +79,5 @@ multipartEncode ()
 }
 alias mp3tom4b="docker run -it --rm --tmpfs=/tmp --user $UID -v '$PWD:/home/abook' audiobook_tools:develop mp3tom4b"
 alias prepaudiobook='docker run -it --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
+alias prepaudiobook_notty='docker run -i --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
 alias mp4chaps='docker run -it --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop mp4chaps'

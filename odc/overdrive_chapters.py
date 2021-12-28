@@ -47,7 +47,8 @@ def main():
          continue
       
       try:
-         et = ElementTree.fromstring( this_xml[1].encode('utf-8') )
+         clean_xml = this_xml[1].replace(u'\ufeff','').replace(u'\u2019',"'")
+         et = ElementTree.fromstring( clean_xml.encode('utf-8') )
          for marker in et.findall("Marker"):
             title =  marker.find("Name").text.strip()
             minsec = marker.find("Time").text.encode('utf-8')
