@@ -54,6 +54,7 @@ multipartEncode ()
     offset=75;
     numPerPart=$(echo "(($numMp3 * 100 /$PARTS) + $offset)/100 " | bc -q);
     partList=$(c=1; while [ $c -le $PARTS ]; do echo $c; c=$[ $c + 1 ]; done );
+    alias prepaudiobook_notty='docker run -i --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
     for PART in $partList;
     do
         export PART;
