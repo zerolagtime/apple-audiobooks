@@ -146,7 +146,7 @@ fi
 
 getAmazonLink() {
    base_url="https://www.amazon.com/s?k="
-   params=$(echo "$@" | sed -e 's/ /_/g; s/\//+/g; s/[-+\.={}\(\)\&\/\\]*//g;s/[_,]/+/g; s/++/+/g')
+   params=$(echo "$@" | sed -e 's%/% %g; s/ /_/g; s/\//+/g; s/[-+\.={}\(\)\&\/\\]*//g;s/[_,]/+/g; s/++/+/g')
    url="$base_url$params"
    #echo "Retrieving URL: $base_url$params"
    #wget -O - --quiet "$base_url$params"
@@ -217,6 +217,6 @@ if [ ! -z "$vol_num" ]; then
 else
    echo "No book selected."
 fi
-echo "Amazon link: $(getAmazonLink $ARTIST $TITLE)"
+echo "Amazon link: $(getAmazonLink "%20$ARTIST%20" "%20$TITLE%20")"
 
 rm $googleJSONFile

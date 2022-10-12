@@ -59,6 +59,7 @@ multipartEncode ()
     do
         export PART;
         ( echo "=========== Part $PART ============";
+        alias prepaudiobook_notty='docker run -i --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
         mkdir part$PART;
         echo "Moving $numPerPart or less files";
         ls --color=auto -1 *.mp3 | head -$numPerPart | xargs -n 1 -I {} mv {} part$PART/;
