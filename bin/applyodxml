@@ -1,0 +1,18 @@
+#!/bin/bash
+odxml_present=$(/bin/ls *.odxml | wc -l 2>/dev/null)
+if [ "$odxml_present" == "0" ]; then
+   python3 /opt/overdrive_chapters/ripmp3_to_odc.py
+fi
+
+for f in *.odxml; do
+    if [ ! -f "$f" ]; then
+       echo "No .odxml files.  This script does not apply."
+       echo "Only use this script for CD rips with rip_audiocd2mp3"
+       exit 1
+    fi
+    mp3="$(basename "$f" ".odxml").mp3"
+    if [ -f "$mp3" ]; then
+       echo "ADD chapter info to $mp3"
+       id3v2 --TXXX "$(cat $f)" "$mp3"
+    fi
+done

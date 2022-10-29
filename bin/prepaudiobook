@@ -28,7 +28,16 @@ if [ -f $INFO ]; then
    echo "You can use   diff $INFO $INFO.bak  to see the differences."
    mv $INFO $INFO.bak
 fi
-
+if [ -f rip.conf ]; then
+   echo "RIPped CD collection detected.  Looking for .cdp (CDParanoia) files"
+   cdp_count=$(/bin/ls *.cdp 2>/dev/null | wc -l)
+   odxml_count=$(/bin/ls *.odxml 2>/dev/null | wc -l)
+   if [ $cdp_count -gt 0 ]; then
+       if [ $odxml_count -eq 0 ]; then
+         /opt/audiobook_tools/applyodxml
+       fi
+   fi
+fi
 #find . \( -name "*.mp3" -o -name "*.ogg" \) -print | while read f; do
 #for f in $(find . \( -name "*.mp3" -o -name "*.ogg" \) -print); do
 for f in *.mp3 *.ogg; do
@@ -41,7 +50,7 @@ for f in *.mp3 *.ogg; do
    a=$(echo "$id3" | grep TPE1 | cut -f2- -d: | sed -e 's/^[ ]*//' )
    b=$(echo "$id3" | grep TALB | cut -f2- -d: | sed -e 's/^[ ]*//' )
    y=$(echo "$id3" | grep TYER | cut -f2- -d: | sed -e 's/^[ ]*//' )
-   c=$(echo "$id3" | grep COMM | cut -f3- -d: | sed -e 's/^[ ]*//' )
+   c=$(echo "$id3" | grep COMM | head -1 | cut -f3- -d: | sed -e 's/^[ ]*//' )
    cpr=$(echo "$id3" | grep TCOP | sed -E -e 's/.*(19(4|5|6|7|8|9)[0-9]|20(0|1|2|3)[0-9]).*/\1/' | grep -v TCOP )
    if [ -z "$TITLE" -a -n "$b" ]; then TITLE="$b"; echo "TITLE=$b"; fi
    if [ -z "$ARTIST" -a -n "$a" ]; then ARTIST="$a"; echo "ARTIST=$a"; fi
@@ -82,8 +91,12 @@ for k in TITLE ARTIST ALBUM YEAR OUT; do
    echo "$k=$v" >> $INFO
    echo "Set $k to \"$v\""
 done
-echo "COMMENT=Read by " >> $INFO
-echo "$COMMENT" > description.txt
+if [ -f rip.conf ]; then
+   echo "COMMENT=$COMMENT" >> $INFO
+else
+   echo "COMMENT=Read by " >> $INFO
+   echo "$COMMENT" > description.txt
+fi
 
 echo "Writing chapter information to $OUT.chapters.txt."
 echo "   You should review the file and either edit it or delete it."
