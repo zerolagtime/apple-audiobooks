@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+import sys
+from xml.dom.minidom import parseString
+from pathlib import Path
+import logging
+import unicodedata
+import re
+
+logger = logging.basicConfig(level=logging.DEBUG)
+
+
+def getText(nodelist):
+    rc = []
+    for node in nodelist:
+        if node.nodeType == node.TEXT_NODE:
+            rc.append(node.data)
+    return ''.join(rc)
+
+
+def getData(nodelist):
+    rc = []
+    for node in nodelist:
+        if node.nodeType == node.DATA_NODE:
+            rc.append(node.data)
+    return ''.join(rc)
+
+
+def oxford_command_join(elements):
+    if len(elements) == 1:
+        return elements[0]
+    if len(elements) == 2:
+        return ", ".join(elements)
+    if len(elements) >= 3:
+        elements[-1] = "and " + elements[-1]
+        return ", ".join(elements)
+    return ""
+
+def slugify(value, allow_unicode=False):
+    """
+    Taken from https://github.com/django/django/blob/master/django/utils/text.py
+    Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
+    dashes to single dashes. Remove characters that aren't alphanumerics,
+    underscores, or hyphens. Convert to lowercase. Also strip leading and
+    trailing whitespace, dashes, and underscores.
+    """
+    value = str(value)
+    if allow_unicode:
+        value = unicodedata.normalize('NFKC', value)
+    else:
+        value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+    value = re.sub(r'[^\w\s-]', '', value.lower())
+    return re.sub(r'[-\s]+', '-', value).strip('-_')
+
+def compute_duration_sec(duration_strings: list = []) -> int:
+    total_sec = 0
+    for ds in duration_strings:
+        m, s = ds.split(":")
+        sec = int(m)*60 + int(s)
+        total_sec += sec
+    return total_sec
+
+def number_output_parts(parts_elements = []) -> int:
+    durations = []
+    for part in parts_elements:
+        try:
+            durations.append(part.getAttribute('duration'))
+        except:
+            part_num = part.getDuration('number')
+            logging.warning(f"Part {part_num} has no duration attribute.  Total duration may be wrong.")
+    sec = compute_duration_sec(durations)
+    logging.debug(f"Run length is {sec} secnds long")
+    max_sec_mp4 = 12 * 3600
+    h,s = divmod(sec, 3600)
+    m,s = divmod(s, 60)
+    logging.debug(f'ODM reports run time at {h:02}:{m:02}:{s:02} (H:M:S)')
+    return int(sec/max_sec_mp4) + 1
+
+fd = sys.stdin
+if len(sys.argv) >= 2:
+    logging.debug("Command line argument discovered")
+    odm = sys.argv[1]
+    logging.debug(f"Opening input file {odm}")
+    if odm and Path(odm).is_file():
+        fd = open(odm,"r")
+    else:
+        logging.warning(f"No such input file {odm}")
+        exit(1)
+else:
+    logging.info("Reading ODM from stdin")
+
+logging.debug("Parsing XML")
+dom1 = parseString(str.join('', fd))
+logging.debug("Parsing complete.  Looking for OverDriveMedia tag")
+odm_dom = dom1.getElementsByTagName("OverDriveMedia")[0]
+logging.debug("Found.  Looking for CDATA with Metadata segment")
+# Shortcut fro CDATA from https://stackoverflow.com/a/597111
+cdata = [n for n in odm_dom.childNodes if n.nodeType==odm_dom.CDATA_SECTION_NODE][0].data
+logging.debug("Found.  Parsing Metadata in CDATA block")
+dom2 = parseString(cdata)
+logging.debug("Found.  Looking for additional elements.")
+authors = []
+narrators = []
+creators = dom2.getElementsByTagName('Creator')
+for c in creators:
+    if c.getAttribute('role') == 'Author':
+        authors.append(getText(c.childNodes))
+    if c.getAttribute('role') == 'Narrator':
+        narrators.append(getText(c.childNodes))
+title = getText(dom2.getElementsByTagName('Title')[0].childNodes)
+title = re.sub('[-;].*', '', title)
+try:
+    series = getText(dom2.getElementsByTagName('Series')[0].childNodes)
+    subtitle = getText(dom2.getElementsByTagName('SubTitle')[0].childNodes)
+    series = re.sub(r'^(A|The)\s', '', series)
+    book = 0
+    m = re.search("book (\d+)", subtitle, re.IGNORECASE)
+    if m:
+        book = int(m.group(1))
+except:
+    series = None
+
+parts_list = dom1.getElementsByTagName('Part')
+output_parts = number_output_parts(parts_list)
+part_text = ''
+lc_part_text = ''
+if output_parts > 1:
+    part_text = ', Part ${PART}'  # not an f-string
+    lc_part_text = '_part${PART}'  # not an f-string
+    logging.warning("This book is more than 12 hours long. Use multipartEncode.")
+
+properties = {
+    'TITLE': f'{title}{part_text}',
+    'ARTIST': f'{oxford_command_join(authors)}',
+    'COMMENT': f'Read by {oxford_command_join(narrators)}'
+}
+
+#print(f"TITLE={title}{part_text}")
+if not series:
+    properties['ALBUM'] = title
+    #print(f"ALBUM={title}")
+else:
+    properties['ALBUM'] = f'{series} Book {book:02} - {title}'
+    #print(f"ALBUM={series} Book {book:02} - {title}")
+#print(f"ARTIST={oxford_command_join(authors)}")
+#print(f"COMMENT=Read by {oxford_command_join(narrators)}")
+lc_author = slugify(authors[0].lower().replace(" ","_"))
+lc_title = slugify(title.lower().replace(" ","_").replace(".",""))
+if not series:
+    properties['OUT'] = f'{lc_author}-{lc_title}{lc_part_text}.m4b'
+    #print(f"OUT={lc_author}-{lc_title}{lc_part_text}.m4b")
+else:
+    lc_series = slugify(series.lower().replace(" ","_"))
+    properties['OUT'] = f'{lc_author}-{lc_series}_book_{book:02}-{lc_title}{lc_part_text}.m4b'
+    #print(f"OUT={lc_author}-{lc_series}_book_{book:02}-{lc_title}{lc_part_text}.m4b")
+for k,v in properties.items():
+    print(f'{k}={v}')
