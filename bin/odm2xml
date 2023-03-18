@@ -5,8 +5,12 @@ from pathlib import Path
 import logging
 import unicodedata
 import re
+import json
+from collections import OrderedDict
+from typing import Union
+import requests, urllib.parse
 
-logger = logging.basicConfig(level=logging.DEBUG)
+logger = logging.basicConfig(level=logging.WARNING)
 
 
 def getText(nodelist):
@@ -75,6 +79,71 @@ def number_output_parts(parts_elements = []) -> int:
     logging.debug(f'ODM reports run time at {h:02}:{m:02}:{s:02} (H:M:S)')
     return int(sec/max_sec_mp4) + 1
 
+def import_info_txt() -> OrderedDict:
+    p = Path('info.txt')
+    info = OrderedDict()
+    if p.exists() and p.is_file():
+        with open(p.resolve(),"r") as f:
+            logging.debug(f'Opened {p.resolve()} for importing')
+            for line in f:
+                try:
+                    k, v = str.split(line,'=')
+                    if not info.get(k.strip()) or (v.find("-Cover") >= 0 and k == "COVER"):
+                        info[k.strip()] = v.strip()
+                except:
+                    pass
+    return info
+
+def hardback_year_google(author, title) -> Union[int, None]:
+    base_url="https://www.googleapis.com/books/v1/volumes"
+    params = {
+        'maxResults': 40,
+        'format': 'json',
+        'printType': 'all',
+        'q': f'"{author}" "{title}"'
+    }
+
+    headers = {}
+    response = requests.get(base_url, headers=headers, params=params)
+    logging.debug(f"GoogleAPI for books return {response.status_code}")
+    if response.status_code < 400:
+        c = response.content.decode(response.apparent_encoding)
+        try:
+            j = json.loads(c)
+        except:
+            raise ValueError("Error parsing json response from GoogleAPI")
+    else:
+        raise ValueError(f"GoogleAPI returned {response.status_code}, value {response.content}")
+    set_author = set(author.lower().split(" "))
+    set_title = set(title.lower().split(" "))
+    published_date = None
+    for entry in j['items']:
+        vi = entry['volumeInfo']
+        if not vi.get('title') or not vi.get('authors'):
+            continue
+        set_vi_title = set(vi['title'].lower().split(" "))
+        set_vi_author = set(vi['authors'][0].lower().split(" "))
+        if ( ( set_title.issubset(set_vi_title) or set_vi_title.issubset(set_title) ) and
+           ( set_author.issubset(set_vi_author) or set_vi_author.issubset(set_author) ) ):
+            published_date = vi['publishedDate']
+            logging.debug(f"MATCH! title={vi['title']}. authors={vi['authors']}, year={vi['publishedDate']}")
+            break
+        else:
+            logging.debug(f"title={vi['title']}. authors={vi['authors']}, year={vi['publishedDate']}")
+    if not published_date:
+        try:
+            published_date = j['items'][0]['volumeInfo']['publishedDate']
+            logging.warn(f"No good match in search results.  Using first guess: {published_date}")
+        except:
+            logging.warn("No search results, no year returned")
+            return None
+
+    match = re.search(r'((19|20)\d\d)',published_date)
+    if match:
+        logging.info(f"Extracted publication year {match.group(1)} from Google search results")
+        return match.group(1)
+    return None
+
 fd = sys.stdin
 if len(sys.argv) >= 2:
     logging.debug("Command line argument discovered")
@@ -126,7 +195,7 @@ lc_part_text = ''
 if output_parts > 1:
     part_text = ', Part ${PART}'  # not an f-string
     lc_part_text = '_part${PART}'  # not an f-string
-    logging.warning("This book is more than 12 hours long. Use multipartEncode.")
+    logging.warning(f"This book is more than 12 hours long. Use:   multipartEncode {output_parts}")
 
 properties = {
     'TITLE': f'{title}{part_text}',
@@ -150,7 +219,15 @@ if not series:
     #print(f"OUT={lc_author}-{lc_title}{lc_part_text}.m4b")
 else:
     lc_series = slugify(series.lower().replace(" ","_"))
-    properties['OUT'] = f'{lc_author}-{lc_series}_book_{book:02}-{lc_title}{lc_part_text}.m4b'
+    properties['OUT'] = f'{lc_author}-{lc_series}_{book:02}-{lc_title}{lc_part_text}.m4b'
     #print(f"OUT={lc_author}-{lc_series}_book_{book:02}-{lc_title}{lc_part_text}.m4b")
-for k,v in properties.items():
-    print(f'{k}={v}')
+info = import_info_txt()
+info['YEAR'] = hardback_year_google(author=authors[0], title=title)
+if not info:
+    for k,v in properties.items():
+        print(f'{k}={v}')
+else:
+    for k,v in properties.items():
+        info[k.strip()] = v.strip()
+    for k,v in info.items():
+        print(f'{k}={v}')
