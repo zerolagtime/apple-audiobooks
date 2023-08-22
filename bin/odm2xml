@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-import sys
-from xml.dom.minidom import parseString
-from pathlib import Path
 import logging
-import unicodedata
-import re
 import json
+import os
+import re
+import requests
+import sys
+import unicodedata
+import urllib.parse
 from collections import OrderedDict
+from pathlib import Path
 from typing import Union
-import requests, urllib.parse
+from xml.dom.minidom import parseString
 
-logger = logging.basicConfig(level=logging.WARNING)
+logger = logging.basicConfig(level=logging.INFO)
 
 
 def getText(nodelist):
@@ -49,9 +51,9 @@ def slugify(value, allow_unicode=False):
     """
     value = str(value)
     if allow_unicode:
-        value = unicodedata.normalize('NFKC', value)
+        value = unicodedata.normalize('NFKC', value).replace(u'\u2014','-')
     else:
-        value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+        value = unicodedata.normalize('NFKD', value).replace(u'\u2014','-').encode('ascii', 'ignore').decode('ascii')
     value = re.sub(r'[^\w\s-]', '', value.lower())
     return re.sub(r'[-\s]+', '-', value).strip('-_')
 
@@ -78,6 +80,13 @@ def number_output_parts(parts_elements = []) -> int:
     m,s = divmod(s, 60)
     logging.debug(f'ODM reports run time at {h:02}:{m:02}:{s:02} (H:M:S)')
     return int(sec/max_sec_mp4) + 1
+
+def orig_info_exists():
+    p = Path('info.txt.orig')
+    return p.exists()
+
+def backup_info_text():
+    os.rename('info.txt', 'info.txt.orig')
 
 def import_info_txt() -> OrderedDict:
     p = Path('info.txt')
@@ -133,9 +142,9 @@ def hardback_year_google(author, title) -> Union[int, None]:
     if not published_date:
         try:
             published_date = j['items'][0]['volumeInfo']['publishedDate']
-            logging.warn(f"No good match in search results.  Using first guess: {published_date}")
+            logging.warning(f"No good match in search results.  Using first guess: {published_date}")
         except:
-            logging.warn("No search results, no year returned")
+            logging.warning("No search results, no year returned")
             return None
 
     match = re.search(r'((19|20)\d\d)',published_date)
@@ -157,77 +166,94 @@ if len(sys.argv) >= 2:
 else:
     logging.info("Reading ODM from stdin")
 
-logging.debug("Parsing XML")
-dom1 = parseString(str.join('', fd))
-logging.debug("Parsing complete.  Looking for OverDriveMedia tag")
-odm_dom = dom1.getElementsByTagName("OverDriveMedia")[0]
-logging.debug("Found.  Looking for CDATA with Metadata segment")
-# Shortcut fro CDATA from https://stackoverflow.com/a/597111
-cdata = [n for n in odm_dom.childNodes if n.nodeType==odm_dom.CDATA_SECTION_NODE][0].data
-logging.debug("Found.  Parsing Metadata in CDATA block")
-dom2 = parseString(cdata)
-logging.debug("Found.  Looking for additional elements.")
-authors = []
-narrators = []
-creators = dom2.getElementsByTagName('Creator')
-for c in creators:
-    if c.getAttribute('role') == 'Author':
-        authors.append(getText(c.childNodes))
-    if c.getAttribute('role') == 'Narrator':
-        narrators.append(getText(c.childNodes))
-title = getText(dom2.getElementsByTagName('Title')[0].childNodes)
-title = re.sub('[-;].*', '', title)
-try:
-    series = getText(dom2.getElementsByTagName('Series')[0].childNodes)
-    subtitle = getText(dom2.getElementsByTagName('SubTitle')[0].childNodes)
-    series = re.sub(r'^(A|The)\s', '', series)
-    book = 0
-    m = re.search("book (\d+)", subtitle, re.IGNORECASE)
-    if m:
-        book = int(m.group(1))
-except:
-    series = None
+def main():
+    logging.debug("Parsing XML")
+    dom1 = parseString(str.join('', fd))
+    logging.debug("Parsing complete.  Looking for OverDriveMedia tag")
+    odm_dom = dom1.getElementsByTagName("OverDriveMedia")[0]
+    logging.debug("Found.  Looking for CDATA with Metadata segment")
+    # Shortcut for CDATA from https://stackoverflow.com/a/597111
+    cdata = [n for n in odm_dom.childNodes if n.nodeType==odm_dom.CDATA_SECTION_NODE][0].data
+    cdata = cdata.replace('& ', 'and ')
+    cdata = cdata.replace('&#8212;', '—')
+    cdata = cdata.replace(u'\u2014', '—')
+    # one line search and replace - https://stackoverflow.com/a/50751493
+    cdata = re.sub(r'&lt;/?\w+&gt;', '', cdata)
+    logging.debug("Found.  Parsing Metadata in CDATA block")
+    dom2 = parseString(cdata)
+    logging.debug("Found.  Looking for additional elements.")
+    authors = []
+    narrators = []
+    creators = dom2.getElementsByTagName('Creator')
+    for c in creators:
+        if c.getAttribute('role') == 'Author':
+            authors.append(getText(c.childNodes))
+        if c.getAttribute('role') == 'Narrator':
+            narrators.append(getText(c.childNodes))
+    title = getText(dom2.getElementsByTagName('Title')[0].childNodes)
+    title = re.sub('[-;].*', '', title)
+    try:
+        series = getText(dom2.getElementsByTagName('Series')[0].childNodes)
+        subtitle = getText(dom2.getElementsByTagName('SubTitle')[0].childNodes)
+        series = re.sub(r'^(A|The)\s', '', series)
+        book = 0
+        m = re.search("book (\d+)", subtitle, re.IGNORECASE)
+        if m:
+            book = int(m.group(1))
+    except:
+        series = None
+    description = getText(dom2.getElementsByTagName('Description')[0].childNodes) or ""
+    parts_list = dom1.getElementsByTagName('Part')
+    output_parts = number_output_parts(parts_list)
+    part_text = ''
+    lc_part_text = ''
+    if output_parts > 1:
+        part_text = ', Part ${PART}'  # not an f-string
+        lc_part_text = '-part${PART}'  # not an f-string
+        logging.warning(f"This book is more than 12 hours long. Use:   multipartEncode {output_parts}")
 
-parts_list = dom1.getElementsByTagName('Part')
-output_parts = number_output_parts(parts_list)
-part_text = ''
-lc_part_text = ''
-if output_parts > 1:
-    part_text = ', Part ${PART}'  # not an f-string
-    lc_part_text = '_part${PART}'  # not an f-string
-    logging.warning(f"This book is more than 12 hours long. Use:   multipartEncode {output_parts}")
+    properties = {
+        'TITLE': f'{title}{part_text}',
+        'ARTIST': f'{oxford_command_join(authors)}',
+        'COMMENT': f'Read by {oxford_command_join(narrators)}'
+    }
 
-properties = {
-    'TITLE': f'{title}{part_text}',
-    'ARTIST': f'{oxford_command_join(authors)}',
-    'COMMENT': f'Read by {oxford_command_join(narrators)}'
-}
+    #print(f"TITLE={title}{part_text}")
+    if not series:
+        properties['ALBUM'] = title
+        #print(f"ALBUM={title}")
+    else:
+        properties['ALBUM'] = f'{series} Book {book:02} - {title}'
+        #print(f"ALBUM={series} Book {book:02} - {title}")
+    #print(f"ARTIST={oxford_command_join(authors)}")
+    #print(f"COMMENT=Read by {oxford_command_join(narrators)}")
+    lc_author = slugify(authors[0].lower().replace(" ","_"))
+    lc_title = slugify(title.lower().replace(" ","_").replace(".",""))
+    if not series:
+        properties['OUT'] = f'{lc_author}-{lc_title}{lc_part_text}.m4b'
+        #print(f"OUT={lc_author}-{lc_title}{lc_part_text}.m4b")
+    else:
+        lc_series = slugify(series.lower().replace(" ","_"))
+        properties['OUT'] = f'{lc_author}-{lc_series}_{book:02}-{lc_title}{lc_part_text}.m4b'
+        #print(f"OUT={lc_author}-{lc_series}_book_{book:02}-{lc_title}{lc_part_text}.m4b")
+    info = import_info_txt()
+    info['YEAR'] = hardback_year_google(author=authors[0], title=title)
+    if not info:
+        for k,v in properties.items():
+            print(f'{k}={v}')
+    else:
+        for k,v in properties.items():
+            info[k.strip()] = v.strip()
+        if not orig_info_exists():
+            backup_info_text()
+            logging.warning("Backed up info.txt to info.txt.orig")
+        with open("info.txt", "w") as f:
+            for k,v in info.items():
+                f.write(f'{k}={v}\n')
+            logging.info("Wrote to info.txt")
+        with open("description.txt", "w") as f:
+            f.write(str(description, encoding="utf8"))
+            logging.info("Wrote to description.txt")
 
-#print(f"TITLE={title}{part_text}")
-if not series:
-    properties['ALBUM'] = title
-    #print(f"ALBUM={title}")
-else:
-    properties['ALBUM'] = f'{series} Book {book:02} - {title}'
-    #print(f"ALBUM={series} Book {book:02} - {title}")
-#print(f"ARTIST={oxford_command_join(authors)}")
-#print(f"COMMENT=Read by {oxford_command_join(narrators)}")
-lc_author = slugify(authors[0].lower().replace(" ","_"))
-lc_title = slugify(title.lower().replace(" ","_").replace(".",""))
-if not series:
-    properties['OUT'] = f'{lc_author}-{lc_title}{lc_part_text}.m4b'
-    #print(f"OUT={lc_author}-{lc_title}{lc_part_text}.m4b")
-else:
-    lc_series = slugify(series.lower().replace(" ","_"))
-    properties['OUT'] = f'{lc_author}-{lc_series}_{book:02}-{lc_title}{lc_part_text}.m4b'
-    #print(f"OUT={lc_author}-{lc_series}_book_{book:02}-{lc_title}{lc_part_text}.m4b")
-info = import_info_txt()
-info['YEAR'] = hardback_year_google(author=authors[0], title=title)
-if not info:
-    for k,v in properties.items():
-        print(f'{k}={v}')
-else:
-    for k,v in properties.items():
-        info[k.strip()] = v.strip()
-    for k,v in info.items():
-        print(f'{k}={v}')
+if __name__ == '__main__':
+    main()

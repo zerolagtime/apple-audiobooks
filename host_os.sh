@@ -15,13 +15,17 @@ waitQuiet ()
 
 encode () 
 { 
+    name=$1;
+    if [ -z "$name" ]; then
+       name=$(basename "$(pwd)" | sed -e 's/[^-_A-Za-z0-9]//g'| tr '[:upper:]' '[:lower:]')
+    fi;
     echo "Encoding starting when idle.  See encode.log for status";
     waitQuiet >> encode.log;
     sleep $[ $RANDOM % 30];
     waitQuiet >> encode.log;
-    echo "Encoding beginning for $(basename "$(pwd)")";
+    echo "Encoding beginning for $(basename "$(pwd)") (container $name)";
 
-    (docker run --rm --tmpfs=/tmp -v "$PWD:/home/abook" --user $UID audiobook_tools:develop mp3tom4b 2>&1 ) 2>&1 >> encode.log
+    (docker run --name "$name" --rm --tmpfs=/tmp -v "$PWD:/home/abook" --user $UID audiobook_tools:develop mp3tom4b 2>&1 ) 2>&1 >> encode.log
 }
 
 multipartEncode () 
@@ -54,18 +58,19 @@ multipartEncode ()
     offset=75;
     numPerPart=$(echo "(($numMp3 * 100 /$PARTS) + $offset)/100 " | bc -q);
     partList=$(c=1; while [ $c -le $PARTS ]; do echo $c; c=$[ $c + 1 ]; done );
-    alias prepaudiobook_notty='docker run -i --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
+    alias prepaudiobook_notty='docker run --name "prepaudiobook-$RANDOM" -i --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
     for PART in $partList;
     do
         export PART;
         ( echo "=========== Part $PART ============";
-        alias prepaudiobook_notty='docker run -i --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
+        alias prepaudiobook_notty='docker run --name "prepaudiobook-$RANDOM" -i --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
         mkdir part$PART;
         echo "Moving $numPerPart or less files";
-        ls --color=auto -1 *.mp3 | head -$numPerPart | xargs -n 1 -I {} mv {} part$PART/;
+        ls --color=auto -1 *.mp3 | head -$numPerPart | xargs -I {} mv {} part$PART/;
         if [ -f "$(echo *.wax)" ]; then
            cp *.wax part$PART/.
         fi
+        name=$(basename "$(pwd)" | sed -e 's/[^-_A-Za-z0-9]//g'| tr '[:upper:]' '[:lower:]')-p$PART
         cd part$PART;
         echo "Computing chapter marks";
         prepaudiobook_notty </dev/null >/dev/null
@@ -74,12 +79,13 @@ multipartEncode ()
         echo "Calculating the info.txt file";
         cat ../info.txt | envsubst > info.txt;
         echo "Scheduling the encoding";
-        ( encode;
+        ( encode $name;
         bash -c "mv *.mp3 *.m4b .." ) & echo "Done with part $PART" );
     done;
     return 0
 }
-alias mp3tom4b="docker run -it --rm --tmpfs=/tmp --user $UID -v '$PWD:/home/abook' audiobook_tools:develop mp3tom4b"
-alias prepaudiobook='docker run -it --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
-alias prepaudiobook_notty='docker run -i --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
-alias mp4chaps='docker run -it --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop mp4chaps'
+alias mp3tom4b="docker run --name "mp3tom4b-$RANDOM" -it --rm --tmpfs=/tmp --user $UID -v '$PWD:/home/abook' audiobook_tools:develop mp3tom4b"
+alias prepaudiobook='docker run --name "prepaudiobook-$RANDOM" -it --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
+alias prepaudiobook_notty='docker run --name "prepaudiobook-$RANDOM" -i --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop prepaudiobook'
+alias mp4chaps='docker run --name "mp4chaps-$RANDOM" -it --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop mp4chaps'
+alias odm2xml='docker run --name "odm2xml-$RANDOM" -it --rm --tmpfs=/tmp --user $UID -v "$PWD:/home/abook" audiobook_tools:develop odm2xml'
