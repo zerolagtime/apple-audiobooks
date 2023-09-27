@@ -252,7 +252,7 @@ def main():
                 f.write(f'{k}={v}\n')
             logging.info("Wrote to info.txt")
         with open("description.txt", "w") as f:
-            f.write(str(description, encoding="utf8"))
+            f.write(str(description))
             logging.info("Wrote to description.txt")
 
 if __name__ == '__main__':

@@ -117,7 +117,7 @@ CHAP=chapters.txt
 wax=$(ls -1 |egrep -e '\.wax$' | tail -1)
 if [ -n "$wax" ]; then
    echo "Overdrive book detected.  Auto building chapters."
-   /opt/overdrive_chapters/overdrive_chapters.py *.mp3 > $CHAP
+   /opt/overdrive_chapters/overdrive_chapters.py  *.mp3 > $CHAP
 fi
 if [ -f $CHAP ]; then
    echo "You have already selected the chapters.  Skipping chapter creation."

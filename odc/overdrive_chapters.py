@@ -1,12 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 import os, sys, math, re
 import optparse
 from optparse import *
 import id3reader
 import mad
-import ElementTree
+import xml.etree.ElementTree as ElementTree
 
-f="Stoneheart-Part01.mp3"
+f="/data/media/speech/Jennifer Chiaverini - Switchboard Soldiers/Switchboard Soldiers-Part01.mp3"
 
 retval = 0
 
@@ -19,19 +19,20 @@ def sec2hms(s):
 
 def main():
    epoch_seconds = 0
-   for f in sys.argv[1:]:
+   for idx,f in enumerate(sys.argv[1:]):
       this_xml = "Unknown";
       this_length = 0
       if not os.path.isfile(f):
          print("File error: %s" % f)
 
-      # print ("# Reading file %s" % f  )
+      # print (f"# Reading file {f} ({idx} of {len(sys.argv[1:])})")
       try: 
          mp3 = id3reader.Reader( f ); 
          # print("# Title = %s" % mp3.getValue('title') )
          this_xml = mp3.getValue('TXXX');
          if (this_xml): 
-            # print("# Overdrive XML = %s" % this_xml[1] ) 
+            # print(f'# {f}')
+            #print("# Overdrive XML = %s" % this_xml[1] ) 
             pass
          else:
             print("# ERROR - no overdrive XML in %s" % f)
@@ -47,11 +48,20 @@ def main():
          continue
       
       try:
-         clean_xml = this_xml[1].replace(u'\ufeff','').replace(u'\u2019',"'")
-         et = ElementTree.fromstring( clean_xml.encode('utf-8') )
+         # clean_xml = this_xml[1].\
+         #         replace(u'\ufeff'.encode('utf-8'),u'').\
+         #         replace(u'\ubfbb'.encode('utf-8'),u'').\
+         #         replace(u'\ubbbf'.encode('utf-8'),u'').\
+         #         replace(u'\u2019'.encode('utf-8'),u"'").\
+         #         replace(u'\u2013'.encode('utf-8'),u' - ').\
+         #         replace(u'\u2014'.encode('utf-8'),u' - ').\
+         #         encode('ascii', 'ignore')
+         clean_xml = this_xml[1]
+         # print(clean_xml, file=sys.stderr)
+         et = ElementTree.fromstring( clean_xml )
          for marker in et.findall("Marker"):
             title =  marker.find("Name").text.strip()
-            minsec = marker.find("Time").text.encode('utf-8')
+            minsec = marker.find("Time").text.strip()
             hms = minsec.split(":")
             # print("  length=%d; minsec=%s hms=" % (len(hms),minsec), hms)
             if (len(hms) == 3):
@@ -66,6 +76,7 @@ def main():
             #print( "== title=%s  length=%s running_seconds=%d" % (title, sec, epoch_seconds+sec) )
       except:
          print( "# Error parsing XML from %s:" % f, sys.exc_info() )
+      # print(f'# epoch_seconds={epoch_seconds} this_length={this_length}')
       epoch_seconds += this_length
 if __name__ == "__main__":
    retval = 0

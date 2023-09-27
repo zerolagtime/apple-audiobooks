@@ -16,7 +16,11 @@ bitrate=112
 join=1
 VERBOSE=1
 # use the ffmpeg progress bar if available
-FFMPEG="$(command -v ffpb || command -v ffmpeg || echo 'ffmpeg_not_found')"
+if [ -t 1 ]; then
+    FFMPEG="$(command -v ffpb || command -v ffmpeg || echo 'ffmpeg_not_found')"
+else
+    FFMPEG="$(command -v ffmpeg || echo 'ffmpeg_not_found')"
+fi
 echo "Found FFMPEG at $FFMPEG"
 usage="Usage: $0 [-v] [-t \"title\"] [-a \"artist\"] [-y year]
      [-l \"album\"] [-b ##] [-c=\"comment\"] [-o file] [-p picture]

@@ -3,12 +3,16 @@
     This code is in the public domain.
 """
 
-__version__ = '1.53.20070415'    # History at the end of the file.
+__version__ = '1.53.20230905'    # History at the end of the file.
 
 # ID3 specs: http://www.id3.org/develop.html
 
 import struct, sys, zlib
 
+MIN_PYTHON = (3, 6)
+if sys.version_info < MIN_PYTHON:
+    sys.exit("Python %s.%s or later is required.\n" % MIN_PYTHON)
+    
 # These are the text encodings, indexed by the first byte of a text value.
 _encodings = ['iso8859-1', 'utf-16', 'utf-16be', 'utf-8']
 
@@ -25,16 +29,10 @@ _simpleDataMapping = {
     'comment':      ('COMM', 'COM', 'v1comment'),
 }
 
-# Provide booleans for older Pythons.
-try:
-    True, False
-except NameError:
-    True, False = 1==1, 1==0
-
 # Tracing
 _t = False
 def _trace(msg):
-    print msg
+    print(msg)
 
 # Coverage
 _c = False
@@ -48,7 +46,8 @@ def _safestr(s):
         no matter what's in it.
     """
     try:
-        return unicode(s).encode(sys.getdefaultencoding())
+        return s.encode(sys.getdefaultencoding())
+        # return unicode(s).encode(sys.getdefaultencoding())
     except UnicodeError:
         return '?: '+repr(s)
 
@@ -137,7 +136,7 @@ class _Frame:
 
         if self.id[0] == 'T':
             # Text fields start with T
-            encoding = ord(self.rawData[0])
+            encoding = self.rawData[0]
             if 0 <= encoding < len(_encodings):
                 #if _c: _coverage('encoding%d' % encoding)
                 value = self.rawData[1:].decode(_encodings[encoding])
@@ -163,7 +162,7 @@ class _Frame:
                 self.rawData = zlib.decompress(self.rawData[5:])
             else:
                 #if _c: _coverage('badcdm!')
-                raise Id3Error, 'Unknown CDM compression: %02x' % self.rawData[0]
+                raise Id3Error('Unknown CDM compression: %02x' % self.rawData[0])
             #@TODO: re-interpret the decompressed frame.
 
         elif self.id in _simpleDataMapping['comment']:
@@ -226,15 +225,15 @@ class Reader:
         """
         #if _t: _trace("ask %d (%s)" % (num,desc))
         if num > self.bytesLeft:
-            #if _c: _coverage('long!')
-            raise Id3Error, 'Long read (%s): (%d > %d)' % (desc, num, self.bytesLeft)
+            #if _c: _coverage(('long!')
+            raise Id3Error('Long read (%s): (%d > %d)' % (desc, num, self.bytesLeft))
         bytes = self.file.read(num)
         self.bytesLeft -= num
 
         if len(bytes) < num:
             #if _t: _trace("short read with %d left, %d total" % (self.bytesLeft, self.header.size))
             #if _c: _coverage('short!')
-            raise Id3Error, 'Short read (%s): (%d < %d)' % (desc, len(bytes), num)
+            raise Id3Error('Short read (%s): (%d < %d)' % (desc, len(bytes), num))
 
         if self.header.bUnsynchronized:
             nUnsync = 0
@@ -302,7 +301,7 @@ class Reader:
         if len(header) < 10:
             return
         hstuff = struct.unpack('!3sBBBBBBB', header)
-        if hstuff[0] != "ID3":
+        if hstuff[0] != b'ID3':
             # Doesn't look like an ID3v2 tag,
             # Try reading an ID3v1 tag.
             self._readId3v1()
@@ -329,7 +328,7 @@ class Reader:
             self._readFrame = self._readFrame_rev4
         else:
             #if _c: _coverage('badmajor!')
-            raise Id3Error, "Unsupported major version: %d" % self.header.majorVersion
+            raise Id3Error("Unsupported major version: %d" % self.header.majorVersion)
 
         # Interpret the flags
         self._interpretFlags()
@@ -427,7 +426,7 @@ class Reader:
     def _isValidId(self, id):
         """ Determine if the id bytes make a valid ID3 id.
         """
-        for c in id:
+        for c in id: 
             if not c in self._validIdChars:
                 #if _c: _coverage('bad id')
                 return False
@@ -457,12 +456,12 @@ class Reader:
         if self.bytesLeft < 10:
             return None
         id = self._readBytes(4,'rev3id')
-        if len(id) < 4 or not self._isValidId(id):
+        if len(id) < 4 or not self._isValidId(id.decode()):
             self._unreadBytes(len(id))
             return None
         hstuff = struct.unpack('!BBBBh', self._readBytes(6,'rev3head'))
         frame = _Frame()
-        frame.id = id
+        frame.id = id.decode()
         frame.size = self._getInteger(hstuff[0:4])
         cbData = frame.size
         frame.flags = hstuff[4]
@@ -540,10 +539,10 @@ class Reader:
             convenience label ('title', 'performer', ...),
             or return None if there is no such value.
         """
-        if self.frames.has_key(id):
+        if id in self.frames:
             if hasattr(self.frames[id], 'value'):
                 return self.frames[id].value
-        if _simpleDataMapping.has_key(id):
+        if id in _simpleDataMapping:
             for id2 in _simpleDataMapping[id]:
                 v = self.getValue(id2)
                 if v:
@@ -551,38 +550,38 @@ class Reader:
         return None
 
     def getRawData(self, id):
-        if self.frames.has_key(id):
+        if id in self.frames:
             return self.frames[id].rawData
         return None
 
     def dump(self):
         import pprint
-        print "Header:"
-        print self.header
-        print "Frames:"
+        print ("Header:")
+        print (self.header)
+        print ("Frames:")
         for fr in self.allFrames:
             if len(fr.rawData) > 30:
                 fr.rawData = fr.rawData[:30]
         pprint.pprint(self.allFrames)
         for fr in self.allFrames:
             if hasattr(fr, 'value'):
-                print '%s: %s' % (fr.id, _safestr(fr.value))
+                print ('%s: %s' % (fr.id, _safestr(fr.value)))
             else:
-                print '%s= %s' % (fr.id, _safestr(fr.rawData))
+                print ('%s= %s' % (fr.id, _safestr(fr.rawData)))
         for label in _simpleDataMapping.keys():
             v = self.getValue(label)
             if v:
-                print 'Label %s: %s' % (label, _safestr(v))
+                print ('Label %s: %s' % (label, _safestr(v)))
 
     def dumpCoverage(self):
         feats = _features.keys()
         feats.sort()
         for feat in feats:
-            print "Feature %-12s: %d" % (feat, _features[feat])
+            print ("Feature %-12s: %d" % (feat, _features[feat]))
 
 if __name__ == '__main__':
     if len(sys.argv) < 2 or '-?' in sys.argv:
-        print "Give me a filename"
+        print ("Give me a filename")
     else:
         id3 = Reader(sys.argv[1])
         id3.dump()
@@ -626,3 +625,5 @@ if __name__ == '__main__':
 # 20070415: Extended headers in ID3v2.4 weren't skipped properly, throwing
 #               everything out of whack.
 #           Be more generous about finding album and performer names in the tag.
+#
+# 20230905: Make it Python3 friendly
