@@ -1,0 +1,7 @@
+# To ensure app dependencies are ported from your virtual environment/host machine into your container, run 'pip freeze > requirements.txt' in the terminal to overwrite this file
+setuptools
+pip
+wheel
+ffpb
+requests
+pymad==0.11.3  # Debian/Ubuntu add libmad0-dev.  Yum/DNF install python-pymad.
