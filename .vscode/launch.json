@@ -1,0 +1,48 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: overdrive_chapters",
+            "type": "python",
+            "request": "launch",
+            "program": "odc/overdrive_chapters.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [ 
+                "/data/media/speech/Jennifer Chiaverini - Switchboard Soldiers/Switchboard Soldiers-Part01.mp3" ,
+                "/data/media/speech/Jennifer Chiaverini - Switchboard Soldiers/Switchboard Soldiers-Part02.mp3" ,
+                "/data/media/speech/Jennifer Chiaverini - Switchboard Soldiers/Switchboard Soldiers-Part03.mp3" ,
+                "/data/media/speech/Jennifer Chiaverini - Switchboard Soldiers/Switchboard Soldiers-Part04.mp3" ,
+                "/data/media/speech/Jennifer Chiaverini - Switchboard Soldiers/Switchboard Soldiers-Part05.mp3" ,
+                "/data/media/speech/Jennifer Chiaverini - Switchboard Soldiers/Switchboard Soldiers-Part06.mp3" ,
+            ]
+        },
+        {
+            "name": "Docker: Python - General",
+            "type": "docker",
+            "request": "launch",
+            "preLaunchTask": "docker-run: debug",
+            "python": {
+                "pathMappings": [
+                    {
+                        "localRoot": "${workspaceFolder}",
+                        "remoteRoot": "/app"
+                    }
+                ],
+                "projectType": "general"
+            }
+        }
+    ]
+}
