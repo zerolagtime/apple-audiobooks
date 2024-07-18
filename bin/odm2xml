@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.10
+import glob
 import logging
 import json
 import os
@@ -75,7 +76,7 @@ def number_output_parts(parts_elements = []) -> int:
             logging.warning(f"Part {part_num} has no duration attribute.  Total duration may be wrong.")
     sec = compute_duration_sec(durations)
     logging.debug(f"Run length is {sec} secnds long")
-    max_sec_mp4 = 12 * 3600
+    max_sec_mp4 = 10 * 3600
     h,s = divmod(sec, 3600)
     m,s = divmod(s, 60)
     logging.debug(f'ODM reports run time at {h:02}:{m:02}:{s:02} (H:M:S)')
@@ -91,6 +92,7 @@ def backup_info_text():
 def import_info_txt() -> OrderedDict:
     p = Path('info.txt')
     info = OrderedDict()
+    found_cove = False
     if p.exists() and p.is_file():
         with open(p.resolve(),"r") as f:
             logging.debug(f'Opened {p.resolve()} for importing')
@@ -99,6 +101,8 @@ def import_info_txt() -> OrderedDict:
                     k, v = str.split(line,'=')
                     if not info.get(k.strip()) or (v.find("-Cover") >= 0 and k == "COVER"):
                         info[k.strip()] = v.strip()
+                    elif k == "COVER" and v.find("-Cover") < 0:
+                        info["COVER"] = list(glob("*-Cover."))[0]
                 except:
                     pass
     return info
@@ -152,19 +156,17 @@ def hardback_year_google(author, title) -> Union[int, None]:
         logging.info(f"Extracted publication year {match.group(1)} from Google search results")
         return match.group(1)
     return None
-
-fd = sys.stdin
-if len(sys.argv) >= 2:
-    logging.debug("Command line argument discovered")
+if len(sys.argv) > 1:
     odm = sys.argv[1]
-    logging.debug(f"Opening input file {odm}")
-    if odm and Path(odm).is_file():
-        fd = open(odm,"r")
-    else:
-        logging.warning(f"No such input file {odm}")
-        exit(1)
 else:
-    logging.info("Reading ODM from stdin")
+    odm = glob.glob("*.odm")[0]
+logging.debug(f"Opening input file {odm}")
+if odm and Path(odm).is_file():
+    fd = open(odm,"r")
+else:
+    logging.warning(f"No such input file {odm if odm else None}")
+    exit(1)
+
 
 def main():
     logging.debug("Parsing XML")
@@ -210,23 +212,25 @@ def main():
     if output_parts > 1:
         part_text = ', Part ${PART}'  # not an f-string
         lc_part_text = '-part${PART}'  # not an f-string
-        logging.warning(f"This book is more than 12 hours long. Use:   multipartEncode {output_parts}")
+        logging.warning(f"This book is more than 10 hours long. Use:   multipartEncode {output_parts}")
 
     properties = {
-        'TITLE': f'{title}{part_text}',
+        'ALBUM': f'{title}{part_text}',
         'ARTIST': f'{oxford_command_join(authors)}',
         'COMMENT': f'Read by {oxford_command_join(narrators)}'
     }
 
-    #print(f"TITLE={title}{part_text}")
+    logging.debug(f"ALBUM={title}{part_text}")
     if not series:
-        properties['ALBUM'] = title
-        #print(f"ALBUM={title}")
+        properties['TITLE'] = f'title{part_text}'
+        logging.debug(f"TITLE={properties['TITLE']}")
     else:
+        properties['TITLE'] = f'{series} Book {book:02} - {title}{part_text}'
         properties['ALBUM'] = f'{series} Book {book:02} - {title}'
-        #print(f"ALBUM={series} Book {book:02} - {title}")
-    #print(f"ARTIST={oxford_command_join(authors)}")
-    #print(f"COMMENT=Read by {oxford_command_join(narrators)}")
+        logging.debug(f"TITLE={properties['TITLE']}")
+        logging.debug(f"ALBUM={properties['ALBUM']}")
+    logging.debug(f"ARTIST={oxford_command_join(authors)}")
+    logging.debug(f"COMMENT=Read by {oxford_command_join(narrators)}")
     lc_author = slugify(authors[0].lower().replace(" ","_"))
     lc_title = slugify(title.lower().replace(" ","_").replace(".",""))
     if not series:
