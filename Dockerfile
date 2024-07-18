@@ -50,7 +50,6 @@ RUN pip3 install --upgrade setuptools build pip && \
     python3 -m build . && \
     rm dist/*.tar.gz
 
-
 # syntax=docker/dockerfile:1.0
 FROM ubuntu:jammy-20221020
 COPY --from=build /src/pymad/dist/*.whl /tmp/wheel/
